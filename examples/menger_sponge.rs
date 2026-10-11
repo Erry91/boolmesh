@@ -121,10 +121,8 @@ pub fn menger_sponge(n: usize) -> Manifold<Uv> {
 // The texture is an atlas of two squares: the outer skin on the left and the tunnel wall on the right.
 const PAD: f64 = 0.004;
 fn atlas(i: usize, s: f64) -> Real { ((i as f64 + PAD + (1. - 2. * PAD) * s) / 2.) as Real }
-
 fn skin_uv(k: usize, q: [f64; 3]) -> Uv { Uv::new(atlas(0, q[(k + 1) % 3]), q[(k + 2) % 3] as Real) }
-
-fn tunnel_uv(k: usize, q: [f64; 3]) -> Uv { Uv::new(atlas(1, if k == 0 { q[1] } else { q[0] }), q[2] as Real) }
+fn tunl_uv(k: usize, q: [f64; 3]) -> Uv { Uv::new(atlas(1, if k == 0 { q[1] } else { q[0] }), q[2] as Real) }
 
 fn cube(c: [f64; 3], s: [f64; 3], uv: fn(usize, [f64; 3]) -> Uv) -> Buf {
     let (mut pos, mut idx, mut uvs) = (vec![], vec![], vec![]);
@@ -148,7 +146,7 @@ fn cube(c: [f64; 3], s: [f64; 3], uv: fn(usize, [f64; 3]) -> Uv) -> Buf {
 
 pub fn fractal(holes: &mut Buf, x: f64, y: f64, w: f64, depth: usize, depth_max: usize) {
     let w = w / 3.;
-    let (pos, idx, uvs) = cube([x, y, 0.], [w, w, 1.], tunnel_uv);
+    let (pos, idx, uvs) = cube([x, y, 0.], [w, w, 1.], tunl_uv);
     let offset = holes.0.len() / 3;
     holes.0.extend(pos);
     holes.1.extend(idx.iter().map(|i| i + offset));
@@ -176,7 +174,7 @@ fn texture() -> Image {
     for y in 0..h { for x in 0..2 * h {
         let s = (((x % h) as f64 + 0.5) / h as f64 - PAD) / (1. - 2. * PAD);
         let (s, t) = (s as f32, (y as f32 + 0.5) / h as f32);
-        let c = if x < h { skin(s, t) } else { tunnel(s, t) }.to_srgba();
+        let c = if x < h { skin(s, t) } else { tunl(s, t) }.to_srgba();
         data.extend([c.red, c.green, c.blue].map(|v| (v.clamp(0., 1.) * 255.).round() as u8));
         data.push(255);
     }}
@@ -201,7 +199,7 @@ fn skin(s: f32, t: f32) -> Color {
     Color::hsl(hue.rem_euclid(360.), 0.65, light)
 }
 
-fn tunnel(s: f32, t: f32) -> Color {
+fn tunl(s: f32, t: f32) -> Color {
     let band = (s * 3.).floor();
     let f = s * 3. - band;
     let ring = (t * 27.).fract();
