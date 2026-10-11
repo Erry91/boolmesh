@@ -19,7 +19,7 @@ pub fn winding03<S>(
         ps_p: &ma.ps,
         ps_q: &mb.ps,
         hs_q: &mb.hs,
-        ns: &mp.vert_normals,
+        ns: &mp.vns,
         expand,
         fwd,
     };

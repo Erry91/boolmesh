@@ -17,17 +17,17 @@ use super::hmesh::Hmesh;
 // maintains internal face index sorting based on vertex positions—a prerequisite for all subsequent operations.
 #[derive(Clone, Debug)]
 pub struct Manifold<S = Real>  {
-    pub ps : Vec<Vec3>,           // positions
-    pub hs : Vec<Half>,           // halfedges
-    pub uvs: Vec<S>,              //
+    pub ps: Vec<Vec3>,            // positions
+    pub hs: Vec<Half>,            // halfedges
+    pub uvs: Vec<S>,              // values on each corners
     pub eps: Real,                // epsilon
     pub tol: Real,                // tolerance
     pub nv: usize,                // number of vertices
     pub nf: usize,                // number of faces
     pub nh: usize,                // number of halfedges
     pub bb: BBox,                 // bounding box
-    pub face_normals: Vec<Vec3>,  //
-    pub vert_normals: Vec<Vec3>,  //
+    pub fns: Vec<Vec3>,           // face normals
+    pub vns: Vec<Vec3>,           // vert normals
     pub collider: MortonCollider, //
     pub coplanar: Vec<i32>,       // indices of coplanar faces
 }
@@ -96,22 +96,7 @@ impl<S: Data> Manifold<S> {
         let collider = MortonCollider::new(&f_bb, &f_mt);
         let coplanar = compute_coplanar_idx(&ps, &hm.fns, &hs, eps);
 
-        let mfd = Manifold {
-            hs,
-            ps,
-            uvs,
-            nv: hm.nv,
-            nf: hm.nf,
-            nh: hm.nh,
-            bb,
-            vert_normals: hm.vns,
-            face_normals: hm.fns,
-            eps,
-            tol,
-            collider,
-            coplanar,
-        };
-
+        let mfd = Manifold { hs, ps, uvs, nv: hm.nv, nf: hm.nf, nh: hm.nh, bb, vns: hm.vns, fns: hm.fns, eps, tol, collider, coplanar };
         if !mfd.is_manifold() { return Err("The input mesh is not manifold".into()); }
         Ok(mfd)
     }

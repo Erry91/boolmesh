@@ -89,8 +89,8 @@ fn size_output<S>(
     fns.resize(nf_r, Vec3::ZERO);
 
     let mut fid_r = 0;
-    for (i, n) in mp.face_normals.iter().enumerate() { if side_p[i] > 0 { fns[fid_r] = *n; fid_r += 1; } }
-    for (i, n) in mq.face_normals.iter().enumerate() { if side_q[i] > 0 { fns[fid_r] = *n * if inv {-1.} else {1.}; fid_r += 1; } }
+    for (i, n) in mp.fns.iter().enumerate() { if side_p[i] > 0 { fns[fid_r] = *n; fid_r += 1; } }
+    for (i, n) in mq.fns.iter().enumerate() { if side_q[i] > 0 { fns[fid_r] = *n * if inv {-1.} else {1.}; fid_r += 1; } }
 
     let truncated = side_pq.iter().filter(|s| **s > 0).copied().collect::<Vec<_>>();
     let mut ih_per_f = vec![0; truncated.len()];

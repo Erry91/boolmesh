@@ -56,7 +56,7 @@ fn setup(
             let p0 = mf.ps[hs[0].tail];
             let p1 = mf.ps[hs[1].tail];
             let p2 = mf.ps[hs[2].tail];
-            let n  = mf.face_normals[fid];
+            let n  = mf.fns[fid];
             pos.push([p0.x as f32, p0.y as f32, p0.z as f32]);
             pos.push([p1.x as f32, p1.y as f32, p1.z as f32]);
             pos.push([p2.x as f32, p2.y as f32, p2.z as f32]);
