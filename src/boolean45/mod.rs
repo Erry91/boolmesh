@@ -40,9 +40,9 @@ fn exclusive_scan(input: &[i32], output: &mut [i32], offset: i32) {
     }
 }
 
-fn size_output(
-    mp: &Manifold,
-    mq: &Manifold,
+fn size_output<S>(
+    mp: &Manifold<S>,
+    mq: &Manifold<S>,
     i03: &[i32],
     i30: &[i32],
     i12: &[i32],
@@ -89,8 +89,8 @@ fn size_output(
     fns.resize(nf_r, Vec3::ZERO);
 
     let mut fid_r = 0;
-    for (i, n) in mp.face_normals.iter().enumerate() { if side_p[i] > 0 { fns[fid_r] = *n; fid_r += 1; } }
-    for (i, n) in mq.face_normals.iter().enumerate() { if side_q[i] > 0 { fns[fid_r] = *n * if inv {-1.} else {1.}; fid_r += 1; } }
+    for (i, n) in mp.fns.iter().enumerate() { if side_p[i] > 0 { fns[fid_r] = *n; fid_r += 1; } }
+    for (i, n) in mq.fns.iter().enumerate() { if side_q[i] > 0 { fns[fid_r] = *n * if inv {-1.} else {1.}; fid_r += 1; } }
 
     let truncated = side_pq.iter().filter(|s| **s > 0).copied().collect::<Vec<_>>();
     let mut ih_per_f = vec![0; truncated.len()];
@@ -169,7 +169,7 @@ fn pair_up(pts: &mut [EdgePt]) -> Vec<Half> {
 
     let mut edges = Vec::with_capacity(nh);
     for i in 0..nh {
-        edges.push(Half::new_without_pair(pts[i].vid, pts[i + nh].vid));
+        edges.push(Half::tmp(pts[i].vid, pts[i + nh].vid));
     }
     edges
 }
@@ -225,8 +225,8 @@ fn append_partial_edges(
             let bk_edge = face_ptr_r[fid_r] as usize;
             face_ptr_r[fid_l] += 1;
             face_ptr_r[fid_r] += 1;
-            hs_r[fw_edge] = Half::new(h.tail, h.head, bk_edge);
-            hs_r[bk_edge] = Half::new(h.head, h.tail, fw_edge);
+            hs_r[fw_edge] = Half::new(h.tail, h.head, bk_edge, usize::MAX);
+            hs_r[bk_edge] = Half::new(h.head, h.tail, fw_edge, usize::MAX);
             rs_r[fw_edge] = fw_tri;
             rs_r[bk_edge] = bk_tri;
         }
@@ -263,8 +263,8 @@ fn append_new_edges(
             let bk_edge = face_ptr_r[fid_r] as usize;
             face_ptr_r[fid_l] += 1;
             face_ptr_r[fid_r] += 1;
-            hs_r[fw_edge] = Half::new(h.tail, h.head, bk_edge);
-            hs_r[bk_edge] = Half::new(h.head, h.tail, fw_edge);
+            hs_r[fw_edge] = Half::new(h.tail, h.head, bk_edge, usize::MAX);
+            hs_r[bk_edge] = Half::new(h.head, h.tail, fw_edge, usize::MAX);
             rs_r[fw_edge] = fw_ref;
             rs_r[bk_edge] = bk_ref;
         }
@@ -283,7 +283,7 @@ fn append_whole_edges(
     rs_r: &mut[Tref],
 ) {
     for (i, hp) in half_p.iter().enumerate() {
-        if !whole_flag[i] || !hp.is_forward() { continue; }
+        if !whole_flag[i] || !hp.is_fwd() { continue; }
 
         let mut h = hp.clone();
         let inc = i03[h.tail];
@@ -305,8 +305,8 @@ fn append_whole_edges(
             let bk_edge = face_ptr_r[fid_r] as usize;
             face_ptr_r[fid_l] += 1;
             face_ptr_r[fid_r] += 1;
-            hs_r[fw_edge] = Half::new(h.tail, h.head, bk_edge);
-            hs_r[bk_edge] = Half::new(h.head, h.tail, fw_edge);
+            hs_r[fw_edge] = Half::new(h.tail, h.head, bk_edge, usize::MAX);
+            hs_r[bk_edge] = Half::new(h.head, h.tail, fw_edge, usize::MAX);
             rs_r[fw_edge] = fw_ref;
             rs_r[bk_edge] = bk_ref;
             h.tail += 1;
@@ -325,9 +325,9 @@ pub struct Boolean45 {
     pub nv_from_q: usize,
 }
 
-pub fn boolean45(
-    mp: &Manifold,
-    mq: &Manifold,
+pub fn boolean45<S>(
+    mp: &Manifold<S>,
+    mq: &Manifold<S>,
     b03: &Boolean03,
     op: &OpType
 ) -> Boolean45 {

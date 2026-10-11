@@ -47,10 +47,10 @@ impl<'a> Kernel12<'a> {
         for i in 0..3 {
             let q1 = 3 * q2 + i;
             let h = &self.hs_q[q1];
-            let q1f = if h.is_forward() { q1 } else { h.pair };
+            let q1f = if h.is_fwd() { q1 } else { h.pair };
             let op = if self.fwd { self.k11.op(p1, q1f) } else { self.k11.op(q1f, p1) };
             if let Some((s, xyzz)) = op {
-                x12 -= s * if h.is_forward() { 1 } else { -1 };
+                x12 -= s * if h.is_fwd() { 1 } else { -1 };
                 if k < 2 && (k == 0 || (s != 0) != shadow_) {
                     shadow_ = s != 0;
                     xzy_lr0[k].x = xyzz.x;
@@ -72,9 +72,9 @@ impl<'a> Kernel12<'a> {
     }
 }
 
-pub fn intersect12 (
-    mp: &Manifold,
-    mq: &Manifold,
+pub fn intersect12<S> (
+    mp: &Manifold<S>,
+    mq: &Manifold<S>,
     p1q2: &mut Vec<[usize; 2]>,
     expand: Real,
     fwd: bool
@@ -82,21 +82,21 @@ pub fn intersect12 (
     let ma = if fwd { mp } else { mq };
     let mb = if fwd { mq } else { mp };
 
-    let k02 = Kernel02{ ps_p: &ma.ps, ps_q: &mb.ps, hs_q: &mb.hs, ns: &mp.vert_normals, expand, fwd };
-    let k11 = Kernel11{ ps_p: &mp.ps, ps_q: &mq.ps, hs_p: &mp.hs, hs_q: &mq.hs, ns: &mp.vert_normals, expand };
+    let k02 = Kernel02{ ps_p: &ma.ps, ps_q: &mb.ps, hs_q: &mb.hs, ns: &mp.vns, expand, fwd };
+    let k11 = Kernel11{ ps_p: &mp.ps, ps_q: &mq.ps, hs_p: &mp.hs, hs_q: &mq.hs, ns: &mp.vns, expand };
     let k12 = Kernel12{ ps_p: &ma.ps, hs_p: &ma.hs, hs_q: &mb.hs, fwd, k02, k11 };
 
     //#[cfg(feature = "rayon")]
     //let bbs = ma.hs.par_iter()
     //    .enumerate()
     //    .filter_map(|(i, h)| {
-    //        if h.is_forward() { Some(Query::Bb(BBox::new(Some(i), &[ma.ps[h.tail], ma.ps[h.head]]))) }
+    //        if h.is_fwd() { Some(Query::Bb(BBox::new(Some(i), &[ma.ps[h.tail], ma.ps[h.head]]))) }
     //        else { None }
     //    }).collect::<Vec<Query>>();
     //#[cfg(not(feature = "rayon"))]
     let bbs = ma.hs.iter()
         .enumerate()
-        .filter(|(_, h)| h.is_forward())
+        .filter(|(_, h)| h.is_fwd())
         .map(|(i, h)| Query::Bb(BBox::new(Some(i), &[ma.ps[h.tail], ma.ps[h.head]])))
         .collect::<Vec<Query>>();
 

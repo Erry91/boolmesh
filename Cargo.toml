@@ -1,8 +1,8 @@
 [package]
 name = "boolmesh"
-version = "0.1.10"
+version = "0.2.0"
 edition = "2024"
-description = "Robust 3D mesh boolean library"
+description = "Robust 3D mesh boolean library in pure Rust"
 rust-version = "1.87"
 license = "MPL-2.0"
 readme = "README.md"
@@ -42,10 +42,5 @@ bevy = [
 
 [[example]]
 name = "menger_sponge"
-path = "examples/menger_sponge.rs"
-required-features = ["bevy"]
-
-[[example]]
-name = "multiple_models"
-path = "examples/multiple_models.rs"
+path = "examples/demo.rs"
 required-features = ["bevy"]

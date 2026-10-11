@@ -9,6 +9,7 @@ mod manifold;
 mod triangulation;
 mod simplification;
 mod common;
+mod values;
 mod boolean03;
 mod boolean45;
 mod tests;
@@ -18,6 +19,7 @@ use crate::boolean45::boolean45;
 use crate::simplification::simplify_topology;
 use crate::triangulation::triangulate;
 use crate::common::*;
+use crate::values::*;
 use crate::manifold::*;
 
 pub use crate::common::{Real, Vec2, Vec3, Vec4, Mat3, K_PRECISION};
@@ -28,23 +30,29 @@ pub mod prelude {
     pub use crate::compute_boolean;
 }
 
-pub fn compute_boolean(
-    mp: &Manifold,
-    mq: &Manifold,
+pub trait Data: Clone + Send + Sync + std::fmt::Debug + PartialEq + Default + std::ops::Add<Output = Self> + std::ops::Mul<Real, Output = Self> {}
+impl<T> Data for T where T: Clone + Send + Sync + std::fmt::Debug + PartialEq + Default + std::ops::Add<Output = T> + std::ops::Mul<Real, Output = T> {}
+
+
+pub fn compute_boolean<S: Data>(
+    mp: &Manifold<S>,
+    mq: &Manifold<S>,
     op: OpType,
-) -> Result<Manifold, String> {
+) -> Result<Manifold<S>, String> {
     let eps = mp.eps.max(mq.eps);
     let tol = mp.tol.max(mq.tol);
 
     let     b03 = boolean03(mp, mq, &op);
     let mut b45 = boolean45(mp, mq, &b03, &op);
     let mut trg = triangulate(mp, mq, &b45, eps)?;
+    let mut val = annotate(&mut trg.hs, &b45.ps, &trg.rs, mp, mq, eps);
 
     simplify_topology(
         &mut trg.hs,
         &mut b45.ps,
         &mut trg.ns,
         &mut trg.rs,
+        &mut val,
         b45.nv_from_p,
         b45.nv_from_q,
         eps
@@ -57,10 +65,8 @@ pub fn compute_boolean(
 
     Manifold::new_impl(
         b45.ps,
-        trg.hs
-            .chunks(3)
-            .map(|hs| Vec3u::new(hs[0].tail, hs[1].tail, hs[2].tail))
-            .collect(),
+        trg.hs,
+        val,
         Some(eps),
         Some(tol)
     )

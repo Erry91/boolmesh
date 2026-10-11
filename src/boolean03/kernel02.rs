@@ -33,7 +33,7 @@ impl<'a> Kernel02<'a> {
         for i in 0..3 {
             let q1 = 3 * q2 + i;
             let half = self.hs_q[q1].clone();
-            let q1_f = if half.is_forward() { q1 } else { half.pair };
+            let q1_f = if half.is_fwd() { q1 } else { half.pair };
 
             if !fwd {
                 let q_vert = self.hs_q[q1_f].tail;
@@ -47,7 +47,7 @@ impl<'a> Kernel02<'a> {
 
             // If the value is None, then these do not overlap
             if let Some((s01, yz01)) = shadows01(p0, q1_f, self.ps_p, self.ps_q, self.hs_q, self.ns, exp, !fwd) {
-                s02 += s01 * if fwd == half.is_forward() {-1} else {1};
+                s02 += s01 * if fwd == half.is_fwd() {-1} else {1};
                 if k < 2 && (k == 0 || (s01 != 0) != shadows_) {
                     shadows_ = s01 != 0;
                     yzz_rl[k] = Vec3::new(yz01.x, yz01.y, yz01.y);

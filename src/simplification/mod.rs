@@ -4,16 +4,17 @@
 pub mod dedup;
 pub mod re_swap;
 pub mod collapse;
-use crate::{Real, Half, Tref, next_of, Vec2, Vec3};
+use crate::{Data, Real, Half, Tref, next_of, Vec2, Vec3};
 use collapse::{collapse_edge, collapse_short_edges, collapse_collinear_edges};
 use dedup::dedupe_edges;
 use re_swap::swap_degenerates;
 
-pub fn simplify_topology(
+pub fn simplify_topology<S: Data>(
     hs: &mut Vec<Half>,
     ps: &mut Vec<Vec3>,
     ns: &mut Vec<Vec3>,
     rs: &mut Vec<Tref>,
+    vs: &mut Vec<S>,
     nv_from_p: usize,
     nv_from_q: usize,
     eps: Real,
@@ -21,9 +22,9 @@ pub fn simplify_topology(
     let nv = nv_from_p + nv_from_q;
     split_pinched_vert(hs, ps);
     dedupe_edges(ps, hs, ns, rs);
-    collapse_short_edges(hs, ps, ns, rs, nv, eps);
-    collapse_collinear_edges(hs, ps, ns, rs, nv, eps);
-    swap_degenerates(hs, ps, ns, rs, nv, eps);
+    collapse_short_edges(hs, ps, ns,     rs, nv, !vs.is_empty(), eps);
+    collapse_collinear_edges(hs, ps, ns, rs, nv, !vs.is_empty(), eps);
+    swap_degenerates(hs, ps, ns, rs, vs, nv, eps);
 }
 
 fn head_of(hs: &[Half], i: usize) -> usize { hs[i].head }
@@ -137,7 +138,7 @@ fn collapse_triangle(hs: &mut [Half], hids: &(usize, usize, usize)) {
     let pair2 = pair_of(hs, hids.2);
     hs[pair1].pair = pair2;
     hs[pair2].pair = pair1;
-    for i in [hids.0, hids.1, hids.2] { hs[i] = Half::default(); }
+    for i in [hids.0, hids.1, hids.2] { hs[i] = Half { prop: hs[i].prop, ..Half::default() }; }
 }
 
 fn is01_longest_2d(

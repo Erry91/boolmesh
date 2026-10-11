@@ -5,9 +5,9 @@ use super::kernel02::Kernel02;
 use crate::bounds::{BPos, Query};
 use crate::{Real, Vec2, Manifold};
 
-pub fn winding03(
-    mp: &Manifold,
-    mq: &Manifold,
+pub fn winding03<S>(
+    mp: &Manifold<S>,
+    mq: &Manifold<S>,
     expand: Real,
     fwd: bool
 ) -> Vec<i32> {
@@ -19,7 +19,7 @@ pub fn winding03(
         ps_p: &ma.ps,
         ps_q: &mb.ps,
         hs_q: &mb.hs,
-        ns: &mp.vert_normals,
+        ns: &mp.vns,
         expand,
         fwd,
     };

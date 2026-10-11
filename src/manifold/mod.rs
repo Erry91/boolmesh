@@ -9,45 +9,49 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use bounds::BBox;
 use crate::collider::{morton_code, MortonCollider, K_NO_CODE};
-use crate::{Real, Half, Vec3, Vec3u, K_PRECISION, next_of, Mat3};
+use crate::{Data, Real, Half, Vec3, Vec3u, K_PRECISION, next_of};
 use super::hmesh::Hmesh;
 #[cfg(feature = "rayon")] use rayon::prelude::*;
 
 // The core struct for all boolean operations. Avoid modifying properties directly, as the struct
 // maintains internal face index sorting based on vertex positions—a prerequisite for all subsequent operations.
 #[derive(Clone, Debug)]
-pub struct Manifold {
+pub struct Manifold<S = Real>  {
     pub ps: Vec<Vec3>,            // positions
     pub hs: Vec<Half>,            // halfedges
     pub nv: usize,                // number of vertices
     pub nf: usize,                // number of faces
     pub nh: usize,                // number of halfedges
+    pub bb: BBox,                 // bounding box
     pub eps: Real,                // epsilon
     pub tol: Real,                // tolerance
-    pub bounding_box: BBox,       //
-    pub face_normals: Vec<Vec3>,  //
-    pub vert_normals: Vec<Vec3>,  //
-    pub original_idx: Vec<usize>, //
+    pub fns: Vec<Vec3>,           // face normals
+    pub vns: Vec<Vec3>,           // vert normals
+    pub vals: Vec<S>,             // values on each corner (num of faces * 3)
     pub collider: MortonCollider, //
     pub coplanar: Vec<i32>,       // indices of coplanar faces
 }
 
 impl Manifold {
-    pub fn new(pos: &[f64], idx: &[usize]) -> Result<Self, String> {
+    pub fn new(pos: &[f64], idx: &[usize]) -> Result<Self, String> { Self::new_with_values(pos, idx, &[]) }
+}
 
-        if pos.len() % 3 != 0 { return Err("pos must be a multiple of 3".into()); }
-        if idx.len() % 3 != 0 { return Err("idx must be a multiple of 3".into()); }
+impl<S: Data> Manifold<S> {
+    pub fn new_with_values(pos: &[f64], idx: &[usize], val: &[S]) -> Result<Self, String> {
+        if !pos.len().is_multiple_of(3) { return Err("pos must be a multiple of 3".into()); }
+        if !idx.len().is_multiple_of(3) { return Err("idx must be a multiple of 3".into()); }
+        if !val.is_empty() && val.len() != pos.len() / 3 { return Err("val must hold one value per vertex".into()); }
 
         // dedup vertices
-        let mut hash  = HashMap::with_capacity(pos.len() / 3);
-        let mut weld  = Vec::with_capacity(pos.len() / 3);
+        let mut hash = HashMap::with_capacity(pos.len() / 3);
+        let mut weld = Vec::with_capacity(pos.len() / 3);
         let mut rmap = vec![0; pos.len()];
+        let mut hs   = Vec::with_capacity(idx.len());
 
         for (i, p) in pos.chunks(3).enumerate() {
             let v = Vec3::new(p[0] as Real, p[1] as Real, p[2] as Real);
             let k = (v.x.to_bits(), v.y.to_bits(), v.z.to_bits());
-            if let Some(&w) = hash.get(&k) { rmap[i] = w; }
-            else {
+            if let Some(&w) = hash.get(&k) { rmap[i] = w; } else {
                 let n = weld.len();
                 weld.push(v);
                 hash.insert(k, n);
@@ -55,26 +59,36 @@ impl Manifold {
             }
         }
 
-        // remove collapsed triangles
-        let idx = idx
-            .chunks(3)
-            .map(|i| Vec3u::new(rmap[i[0]], rmap[i[1]], rmap[i[2]]))
-            .filter(|&is| is.x != is.y && is.y != is.z && is.z != is.x)
-            .collect::<Vec<_>>();
+        // create halfedge container
+        for i in idx.chunks(3) {
+            let v = [rmap[i[0]], rmap[i[1]], rmap[i[2]]];
+            if v[0] == v[1] || v[1] == v[2] || v[2] == v[0] { continue; }
+            hs.push(Half::new(v[0], v[1], usize::MAX, i[0]));
+            hs.push(Half::new(v[1], v[2], usize::MAX, i[1]));
+            hs.push(Half::new(v[2], v[0], usize::MAX, i[2]));
+        }
 
-        Self::new_impl(weld, idx, None, None)
+        let mut mfd = Self::new_impl(weld, hs, val.to_vec(), None, None)?;
+        if !mfd.vals.is_empty() { dedupe_values(&mut mfd.hs, &mfd.vals); }
+        Ok(mfd)
     }
 
     pub(crate) fn new_impl(
-        ps : Vec<Vec3>,
-        idx: Vec<Vec3u>,
+        ps: Vec<Vec3>,
+        hs: Vec<Half>,
+        vs: Vec<S>,
         eps: Option<Real>,
         tol: Option<Real>,
     ) -> Result<Self, String> {
         let bb = BBox::new(None, &ps);
+        let idx = hs.chunks(3).map(|t| Vec3u::new(t[0].tail, t[1].tail, t[2].tail)).collect::<Vec<_>>();
         let (mut f_bb, mut f_mt) = compute_face_morton(&ps, &idx, &bb);
-        let hm = sort_faces(&ps, &idx, &mut f_bb, &mut f_mt)?;
-        let hs = hm.half.iter().map(|&i| Half::new(hm.tail[i], hm.head[i], hm.twin[i])).collect::<Vec<_>>();
+        let (hm, map) = sort_faces(&ps, &idx, &mut f_bb, &mut f_mt)?;
+        let prop = |i: usize| hs[3 * map[i / 3] + i % 3].prop;
+        let mut hs = hm.half.iter().map(|&i| Half::new(hm.tail[i], hm.head[i], hm.twin[i], prop(i))).collect::<Vec<_>>();
+
+        if vs.is_empty() { for h in hs.iter_mut() { h.prop = h.tail; } }
+        let vals = if vs.is_empty() { vec![] } else { hs.iter().map(|h| vs[h.prop].clone()).collect() };
 
         let mut e = K_PRECISION * bb.scale();
         e = if e.is_finite() { e } else { -1. };
@@ -83,22 +97,7 @@ impl Manifold {
         let collider = MortonCollider::new(&f_bb, &f_mt);
         let coplanar = compute_coplanar_idx(&ps, &hm.fns, &hs, eps);
 
-        let mfd = Manifold {
-            nv: hm.nv,
-            nf: hm.nf,
-            nh: hm.nh,
-            ps,
-            hs,
-            bounding_box: bb,
-            vert_normals: hm.vns,
-            face_normals: hm.fns,
-            original_idx: vec![],
-            eps,
-            tol,
-            collider,
-            coplanar,
-        };
-
+        let mfd = Manifold { hs, ps, vals, nv: hm.nv, nf: hm.nf, nh: hm.nh, bb, vns: hm.vns, fns: hm.fns, eps, tol, collider, coplanar };
         if !mfd.is_manifold() { return Err("The input mesh is not manifold".into()); }
         Ok(mfd)
     }
@@ -119,7 +118,6 @@ impl Manifold {
             }
         })
     }
-
 }
 
 fn compute_face_morton(
@@ -167,13 +165,12 @@ fn sort_faces(
     idx: &[Vec3u],
     face_bboxes: &mut Vec<BBox>,
     face_morton: &mut Vec<u32>
-) -> Result<Hmesh, String> {
+) -> Result<(Hmesh, Vec<usize>), String> {
     let mut map = (0..face_morton.len()).collect::<Vec<_>>();
     map.sort_by_key(|&i| face_morton[i]);
     *face_bboxes = map.iter().map(|&i| face_bboxes[i].clone()).collect::<Vec<_>>();
     *face_morton = map.iter().map(|&i| face_morton[i]).collect::<Vec<_>>();
-
-    Hmesh::new(pos, &map.iter().map(|&i| idx[i]).collect::<Vec<_>>())
+    Ok((Hmesh::new(pos, &map.iter().map(|&i| idx[i]).collect::<Vec<_>>())?, map))
 }
 
 fn compute_coplanar_idx(
@@ -228,7 +225,7 @@ fn compute_coplanar_idx(
     res
 }
 
-pub fn cleanup_unused_verts(
+pub(crate) fn cleanup_unused_verts(
     ps: &mut Vec<Vec3>,
     hs: &mut Vec<Half>
 ) {
@@ -257,5 +254,18 @@ pub fn cleanup_unused_verts(
 
     *ps = new2old.iter().map(|&i| ps[i]).collect();
     *hs = hs.iter().filter(|h| h.pair().is_some()).cloned().collect();
+}
+
+fn dedupe_values<S: Data>(hs: &mut [Half], vs: &[S]) {
+    let mut root = (0..=hs.iter().map(|h| h.prop).max().unwrap_or(0)).collect::<Vec<_>>();
+    fn find(r: &mut [usize], mut i: usize) -> usize { while r[i] != i { r[i] = r[r[i]]; i = r[i]; } i }
+
+    for e in 0..hs.len() {
+        if hs[e].pair == usize::MAX { continue; }
+        let f = next_of(hs[e].pair);
+        if vs[e] == vs[f] { let (a, b) = (find(&mut root, hs[e].prop), find(&mut root, hs[f].prop)); root[a.min(b)] = a.max(b); }
+    }
+
+    for h in hs.iter_mut() { h.prop = find(&mut root, h.prop); }
 }
 

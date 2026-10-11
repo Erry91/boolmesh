@@ -1,7 +1,7 @@
 //--- Copyright (C) 2025 Saki Komikado <komietty@gmail.com>,
 //--- This Source Code Form is subject to the terms of the Mozilla Public License v.2.0.
 
-use crate::{Real, Vec3, Half, Tref, get_aa_proj_matrix, is_ccw_2d, compute_aa_proj};
+use crate::{Data, Real, Vec3, Half, Tref, get_aa_proj_matrix, is_ccw_2d, compute_aa_proj};
 use super::{collapse_edge, form_loops, head_of, is01_longest_2d, next_of, pair_of, pair_up, remove_if_folded, tail_of, hids_of};
 
 fn record(
@@ -36,11 +36,12 @@ fn record(
     is_ccw_2d(&a, &b, &c, tol) > 0 || is01_longest_2d(&a, &b, &c)
 }
 
-fn recursive_edge_swap(
+fn recursive_edge_swap<S: Data>(
     hs: &mut [Half],
     ps: &mut Vec<Vec3>,
     ns: &mut [Vec3],
     ts: &mut [Tref],
+    vs: &mut Vec<S>,
     hid: usize,
     tag: &mut i32,
     visit: &mut [i32],
@@ -95,6 +96,18 @@ fn recursive_edge_swap(
         ns[t0] = ns[t1];
         ts[t0] = ts[t1];
 
+        let l01 = (u1 - u0).length();
+        let l02 = (u2 - u0).length();
+        if !vs.is_empty() {
+            let a = (l02 / l01).min(1.).max(0.);
+            let p = vs.len();
+            vs.push(vs[hs[t1e.0].prop].clone() * a + vs[hs[t1e.1].prop].clone() * (1. - a));
+            hs[t0e.0].prop = hs[t1e.2].prop;
+            hs[t0e.1].prop = hs[t1e.0].prop;
+            hs[t0e.2].prop = p;
+            hs[t1e.0].prop = p;
+        }
+
         // If the new edge already exists, duplicate the verts and split the mesh.
         let mut h = pair_of(hs, t1e.0);
         let head  = head_of(hs, t1e.1);
@@ -116,7 +129,7 @@ fn recursive_edge_swap(
         swap_edge();
         if (u3 - u2).length_squared() < tol * tol {
             *tag += 1;
-            collapse_edge(hs, ps, ns, ts, t0e.2, tol, edges);
+            collapse_edge(hs, ps, ns, ts, t0e.2, !vs.is_empty(), tol, edges);
             edges.clear();
         } else {
             visit[h0] = *tag;
@@ -133,11 +146,12 @@ fn recursive_edge_swap(
     stack.extend_from_slice(&[pair_of(hs, t1e.0), pair_of(hs, t0e.1)]);
 }
 
-pub fn swap_degenerates(
+pub fn swap_degenerates<S: Data>(
     hs: &mut [Half],
     ps: &mut Vec<Vec3>,
     ns: &mut [Vec3],
     ts: &mut [Tref],
+    vs: &mut Vec<S>,
     oft: usize,
     tol: Real
 ) {
@@ -155,9 +169,9 @@ pub fn swap_degenerates(
     for hid in rec {
         _flag += 1;
         tag += 1;
-        recursive_edge_swap(hs, ps, ns, ts, hid, &mut tag, &mut visit, &mut stack, &mut buff, tol);
+        recursive_edge_swap(hs, ps, ns, ts, vs, hid, &mut tag, &mut visit, &mut stack, &mut buff, tol);
         while let Some(last) = stack.pop() {
-            recursive_edge_swap(hs, ps, ns, ts, last, &mut tag, &mut visit, &mut stack, &mut buff, tol);
+            recursive_edge_swap(hs, ps, ns, ts, vs, last, &mut tag, &mut visit, &mut stack, &mut buff, tol);
         }
     }
     #[cfg(feature = "verbose")]
