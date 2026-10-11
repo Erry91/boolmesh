@@ -4,7 +4,7 @@
 [![Crates.io](https://img.shields.io/crates/v/boolmesh.svg)](https://crates.io/crates/boolmesh)
 [![Docs.rs](https://img.shields.io/docsrs/boolmesh)](https://docs.rs/boolmesh)
 
-![demo](https://raw.githubusercontent.com/komietty/boolmesh/main/examples/docs/demo.png)
+![demo](https://raw.githubusercontent.com/komietty/boolmesh/main/examples/demo.jpg)
 Boolmesh is a pure Rust library for performing robust and efficient mesh boolean operations. It is a full-from-scratch Rust implementation inspired by [Elalish’s Manifold](https://manifoldcad.org/docs/html/classmanifold_1_1_manifold.html), which is well known for its robustness and is now part of OpenSCAD.
 
 The codebase is clean and minimal, with dependencies only on `glam`—which provides SIMD acceleration—and optionally on `rayon` for multi-threading support. Besides being robust, Boolmesh is also very fast. For example, generating a Menger Sponge of depth 4 (the model shown on the right) takes only around 8 seconds on an Apple Silicon M4 using single-threading, and around 4 seconds with multi-threading enabled. Also, the library supports both 32-bit and 64-bit floating point arithmetic.

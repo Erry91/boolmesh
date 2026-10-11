@@ -42,5 +42,5 @@ bevy = [
 
 [[example]]
 name = "menger_sponge"
-path = "examples/menger_sponge.rs"
+path = "examples/demo.rs"
 required-features = ["bevy"]
