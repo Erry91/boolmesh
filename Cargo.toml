@@ -11,7 +11,7 @@ homepage = "https://github.com/komietty/boolmesh"
 authors = ["Saki Komikado <komietty@gmail.com>"]
 keywords = ["mesh", "boolean", "csg", "geometry", "modeling"]
 categories = ["algorithms", "mathematics", "graphics", "simulation", "game-development"]
-exclude = ["/examples", ".gitignore"]
+exclude = ["/examples", "/.github", ".gitignore"]
 
 [dependencies]
 glam  = "0.32.1"
