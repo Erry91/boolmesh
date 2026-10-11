@@ -47,6 +47,7 @@ impl<S: Data> Manifold<S> {
         let mut hash = HashMap::with_capacity(pos.len() / 3);
         let mut weld = Vec::with_capacity(pos.len() / 3);
         let mut rmap = vec![0; pos.len()];
+        let mut hs   = Vec::with_capacity(idx.len());
 
         for (i, p) in pos.chunks(3).enumerate() {
             let v = Vec3::new(p[0] as Real, p[1] as Real, p[2] as Real);
@@ -59,38 +60,50 @@ impl<S: Data> Manifold<S> {
             }
         }
 
-        // remove collapsed triangles
-        let idx = idx
-            .chunks(3)
-            .map(|i| Vec3u::new(rmap[i[0]], rmap[i[1]], rmap[i[2]]))
-            .filter(|&is| is.x != is.y && is.y != is.z && is.z != is.x)
-            .collect::<Vec<_>>();
+        for i in idx.chunks(3) {
+            let v = [rmap[i[0]], rmap[i[1]], rmap[i[2]]];
+            if v[0] == v[1] || v[1] == v[2] || v[2] == v[0] { continue; }
+            hs.push(Half::with_prop(v[0], v[1], usize::MAX, i[0]));
+            hs.push(Half::with_prop(v[1], v[2], usize::MAX, i[1]));
+            hs.push(Half::with_prop(v[2], v[0], usize::MAX, i[2]));
+        }
 
-        Self::new_impl(weld, idx, val.to_vec(), None, None)
+        let mut mfd = Self::new_impl(weld, hs, val.to_vec(), None, None)?;
+
+        if !mfd.uvs.is_empty() {
+            dedupe_props(&mut mfd.hs, &mfd.uvs);
+            compact_props(&mut mfd.hs, &mut mfd.uvs);
+        }
+        Ok(mfd)
     }
 
     pub(crate) fn new_impl(
-        pos: Vec<Vec3>,
-        idx: Vec<Vec3u>,
-        uvs: Vec<S>,
+        ps: Vec<Vec3>,
+        hs: Vec<Half>,
+        mut uvs: Vec<S>,
         eps: Option<Real>,
         tol: Option<Real>,
     ) -> Result<Self, String> {
-        let bb = BBox::new(None, &pos);
-        let (mut f_bb, mut f_mt) = compute_face_morton(&pos, &idx, &bb);
-        let hm = sort_faces(&pos, &idx, &mut f_bb, &mut f_mt)?;
-        let hs = hm.half.iter().map(|&i| Half::new(hm.tail[i], hm.head[i], hm.twin[i])).collect::<Vec<_>>();
+        let bb = BBox::new(None, &ps);
+        let idx = hs.chunks(3).map(|t| Vec3u::new(t[0].tail, t[1].tail, t[2].tail)).collect::<Vec<_>>();
+        let (mut f_bb, mut f_mt) = compute_face_morton(&ps, &idx, &bb);
+        let (hm, map) = sort_faces(&ps, &idx, &mut f_bb, &mut f_mt)?;
+        let prop = |i: usize| hs[3 * map[i / 3] + i % 3].prop;
+        let mut hs = hm.half.iter().map(|&i| Half::with_prop(hm.tail[i], hm.head[i], hm.twin[i], prop(i))).collect::<Vec<_>>();
+
+        if !uvs.is_empty() { compact_props(&mut hs, &mut uvs); }
+        else { for h in hs.iter_mut() { h.prop = h.tail; } }
 
         let mut e = K_PRECISION * bb.scale();
         e = if e.is_finite() { e } else { -1. };
         let eps = if let Some(e_) = eps { e_ } else { e };
         let tol = if let Some(t_) = tol { t_ } else { e };
         let collider = MortonCollider::new(&f_bb, &f_mt);
-        let coplanar = compute_coplanar_idx(&pos, &hm.fns, &hs, eps);
+        let coplanar = compute_coplanar_idx(&ps, &hm.fns, &hs, eps);
 
         let mfd = Manifold {
             hs,
-            ps: pos,
+            ps,
             uvs,
             nv: hm.nv,
             nf: hm.nf,
@@ -172,13 +185,12 @@ fn sort_faces(
     idx: &[Vec3u],
     face_bboxes: &mut Vec<BBox>,
     face_morton: &mut Vec<u32>
-) -> Result<Hmesh, String> {
+) -> Result<(Hmesh, Vec<usize>), String> {
     let mut map = (0..face_morton.len()).collect::<Vec<_>>();
     map.sort_by_key(|&i| face_morton[i]);
     *face_bboxes = map.iter().map(|&i| face_bboxes[i].clone()).collect::<Vec<_>>();
     *face_morton = map.iter().map(|&i| face_morton[i]).collect::<Vec<_>>();
-
-    Hmesh::new(pos, &map.iter().map(|&i| idx[i]).collect::<Vec<_>>())
+    Ok((Hmesh::new(pos, &map.iter().map(|&i| idx[i]).collect::<Vec<_>>())?, map))
 }
 
 fn compute_coplanar_idx(
@@ -233,7 +245,7 @@ fn compute_coplanar_idx(
     res
 }
 
-pub fn cleanup_unused_verts(
+pub(crate) fn cleanup_unused_verts(
     ps: &mut Vec<Vec3>,
     hs: &mut Vec<Half>
 ) {
@@ -262,5 +274,36 @@ pub fn cleanup_unused_verts(
 
     *ps = new2old.iter().map(|&i| ps[i]).collect();
     *hs = hs.iter().filter(|h| h.pair().is_some()).cloned().collect();
+}
+
+fn compact_props<S: Clone>(hs: &mut [Half], uv: &mut Vec<S>) {
+    let nv = uv.len();
+    let mut keep = vec![0usize; nv];
+    let mut map  = vec![0usize; nv + 1];
+    for h in hs.iter() { keep[h.prop] = 1; }
+    for i in 0..nv { map[i + 1] = map[i] + keep[i]; }
+    for h in hs.iter_mut() { h.prop = map[h.prop]; }
+    *uv = (0..nv).filter(|&i| keep[i] == 1).map(|i| uv[i].clone()).collect();
+}
+
+fn dedupe_props<S: PartialEq>(hs: &mut [Half], uv: &[S]) {
+    let npv = uv.len();
+    let mut parent = (0..npv).collect::<Vec<_>>();
+    fn find(parent: &mut [usize], mut i: usize) -> usize {
+        while parent[i] != i { parent[i] = parent[parent[i]]; i = parent[i]; }
+        i
+    }
+    for e in 0..hs.len() {
+        if hs[e].pair == usize::MAX { continue; }
+        let prop0 = hs[e].prop;
+        let prop1 = hs[next_of(hs[e].pair)].prop;
+        if uv[prop0] == uv[prop1] {
+            let (a, b) = (find(&mut parent, prop0), find(&mut parent, prop1));
+            if a != b { parent[a] = b; }
+        }
+    }
+    let mut label2vert = vec![0usize; npv];
+    for v in 0..npv { let r = find(&mut parent, v); label2vert[r] = v; }
+    for h in hs.iter_mut() { h.prop = label2vert[find(&mut parent, h.prop)]; }
 }
 

@@ -9,6 +9,7 @@ mod manifold;
 mod triangulation;
 mod simplification;
 mod common;
+mod props;
 mod boolean03;
 mod boolean45;
 mod tests;
@@ -18,6 +19,7 @@ use crate::boolean45::boolean45;
 use crate::simplification::simplify_topology;
 use crate::triangulation::triangulate;
 use crate::common::*;
+use crate::props::*;
 use crate::manifold::*;
 
 pub use crate::common::{Real, Vec2, Vec3, Vec4, Mat3, K_PRECISION};
@@ -43,7 +45,7 @@ pub fn compute_boolean<S: Data>(
     let     b03 = boolean03(mp, mq, &op);
     let mut b45 = boolean45(mp, mq, &b03, &op);
     let mut trg = triangulate(mp, mq, &b45, eps)?;
-    let mut val: Vec<S> = vec![];
+    let mut val = annotate(&mut trg.hs, &b45.ps, &trg.rs, mp, mq, eps);
 
     simplify_topology(
         &mut trg.hs,
@@ -63,11 +65,8 @@ pub fn compute_boolean<S: Data>(
 
     Manifold::new_impl(
         b45.ps,
-        trg.hs
-            .chunks(3)
-            .map(|hs| Vec3u::new(hs[0].tail, hs[1].tail, hs[2].tail))
-            .collect(),
-        vec![],
+        trg.hs,
+        val,
         Some(eps),
         Some(tol)
     )
