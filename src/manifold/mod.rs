@@ -63,9 +63,9 @@ impl<S: Data> Manifold<S> {
         for i in idx.chunks(3) {
             let v = [rmap[i[0]], rmap[i[1]], rmap[i[2]]];
             if v[0] == v[1] || v[1] == v[2] || v[2] == v[0] { continue; }
-            hs.push(Half::with_prop(v[0], v[1], usize::MAX, i[0]));
-            hs.push(Half::with_prop(v[1], v[2], usize::MAX, i[1]));
-            hs.push(Half::with_prop(v[2], v[0], usize::MAX, i[2]));
+            hs.push(Half::new(v[0], v[1], usize::MAX, i[0]));
+            hs.push(Half::new(v[1], v[2], usize::MAX, i[1]));
+            hs.push(Half::new(v[2], v[0], usize::MAX, i[2]));
         }
 
         let mut mfd = Self::new_impl(weld, hs, val.to_vec(), None, None)?;
@@ -85,7 +85,7 @@ impl<S: Data> Manifold<S> {
         let (mut f_bb, mut f_mt) = compute_face_morton(&ps, &idx, &bb);
         let (hm, map) = sort_faces(&ps, &idx, &mut f_bb, &mut f_mt)?;
         let prop = |i: usize| hs[3 * map[i / 3] + i % 3].prop;
-        let mut hs = hm.half.iter().map(|&i| Half::with_prop(hm.tail[i], hm.head[i], hm.twin[i], prop(i))).collect::<Vec<_>>();
+        let mut hs = hm.half.iter().map(|&i| Half::new(hm.tail[i], hm.head[i], hm.twin[i], prop(i))).collect::<Vec<_>>();
 
         if vs.is_empty() { for h in hs.iter_mut() { h.prop = h.tail; } }
         let vals = if vs.is_empty() { vec![] } else { hs.iter().map(|h| vs[h.prop].clone()).collect() };
