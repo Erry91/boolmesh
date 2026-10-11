@@ -25,10 +25,9 @@ pub struct Manifold<S = Real>  {
     pub nv: usize,                // number of vertices
     pub nf: usize,                // number of faces
     pub nh: usize,                // number of halfedges
-    pub bounding_box: BBox,       //
+    pub bb: BBox,                 // bounding box
     pub face_normals: Vec<Vec3>,  //
     pub vert_normals: Vec<Vec3>,  //
-    pub original_idx: Vec<usize>, //
     pub collider: MortonCollider, //
     pub coplanar: Vec<i32>,       // indices of coplanar faces
 }
@@ -69,11 +68,7 @@ impl<S: Data> Manifold<S> {
         }
 
         let mut mfd = Self::new_impl(weld, hs, val.to_vec(), None, None)?;
-
-        if !mfd.uvs.is_empty() {
-            dedupe_props(&mut mfd.hs, &mfd.uvs);
-            compact_props(&mut mfd.hs, &mut mfd.uvs);
-        }
+        if !mfd.uvs.is_empty() { compact_props(&mut mfd.hs, &mut mfd.uvs, true); }
         Ok(mfd)
     }
 
@@ -91,7 +86,7 @@ impl<S: Data> Manifold<S> {
         let prop = |i: usize| hs[3 * map[i / 3] + i % 3].prop;
         let mut hs = hm.half.iter().map(|&i| Half::with_prop(hm.tail[i], hm.head[i], hm.twin[i], prop(i))).collect::<Vec<_>>();
 
-        if !uvs.is_empty() { compact_props(&mut hs, &mut uvs); }
+        if !uvs.is_empty() { compact_props(&mut hs, &mut uvs, false); }
         else { for h in hs.iter_mut() { h.prop = h.tail; } }
 
         let mut e = K_PRECISION * bb.scale();
@@ -108,10 +103,9 @@ impl<S: Data> Manifold<S> {
             nv: hm.nv,
             nf: hm.nf,
             nh: hm.nh,
-            bounding_box: bb,
+            bb,
             vert_normals: hm.vns,
             face_normals: hm.fns,
-            original_idx: vec![],
             eps,
             tol,
             collider,
@@ -276,34 +270,22 @@ pub(crate) fn cleanup_unused_verts(
     *hs = hs.iter().filter(|h| h.pair().is_some()).cloned().collect();
 }
 
-fn compact_props<S: Clone>(hs: &mut [Half], uv: &mut Vec<S>) {
+fn compact_props<S: Data>(hs: &mut [Half], uv: &mut Vec<S>, dedupe: bool) {
     let nv = uv.len();
+    let mut root = (0..nv).collect::<Vec<_>>();
     let mut keep = vec![0usize; nv];
     let mut map  = vec![0usize; nv + 1];
-    for h in hs.iter() { keep[h.prop] = 1; }
+    fn find(r: &mut [usize], mut i: usize) -> usize { while r[i] != i { r[i] = r[r[i]]; i = r[i]; } i }
+
+    for e in 0..hs.len() {
+        if !dedupe || hs[e].pair == usize::MAX { continue; }
+        let (p0, p1) = (hs[e].prop, hs[next_of(hs[e].pair)].prop);
+        if uv[p0] == uv[p1] { let (a, b) = (find(&mut root, p0), find(&mut root, p1)); root[a.min(b)] = a.max(b); }
+    }
+
+    for h in hs.iter_mut() { h.prop = find(&mut root, h.prop); keep[h.prop] = 1; }
     for i in 0..nv { map[i + 1] = map[i] + keep[i]; }
     for h in hs.iter_mut() { h.prop = map[h.prop]; }
     *uv = (0..nv).filter(|&i| keep[i] == 1).map(|i| uv[i].clone()).collect();
-}
-
-fn dedupe_props<S: PartialEq>(hs: &mut [Half], uv: &[S]) {
-    let npv = uv.len();
-    let mut parent = (0..npv).collect::<Vec<_>>();
-    fn find(parent: &mut [usize], mut i: usize) -> usize {
-        while parent[i] != i { parent[i] = parent[parent[i]]; i = parent[i]; }
-        i
-    }
-    for e in 0..hs.len() {
-        if hs[e].pair == usize::MAX { continue; }
-        let prop0 = hs[e].prop;
-        let prop1 = hs[next_of(hs[e].pair)].prop;
-        if uv[prop0] == uv[prop1] {
-            let (a, b) = (find(&mut parent, prop0), find(&mut parent, prop1));
-            if a != b { parent[a] = b; }
-        }
-    }
-    let mut label2vert = vec![0usize; npv];
-    for v in 0..npv { let r = find(&mut parent, v); label2vert[r] = v; }
-    for h in hs.iter_mut() { h.prop = label2vert[find(&mut parent, h.prop)]; }
 }
 
