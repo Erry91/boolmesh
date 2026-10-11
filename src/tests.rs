@@ -615,6 +615,7 @@ mod test_values {
             if s > 0. { idx.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]); }
             else      { idx.extend_from_slice(&[base, base + 2, base + 1, base, base + 3, base + 2]); }
         }}
+        let vals = idx.iter().map(|&i| vals[i]).collect();
         (pos, idx, vals)
     }
 
@@ -697,9 +698,9 @@ mod test_values {
     fn test_values_scalar() {
         let f = |p: &[f64]| (p[0] + 2. * p[1] - 3. * p[2]) as Real;
         let (pos, idx, _) = uv_cube_buf([0., 0., 0.], 1., 0.);
-        let p = Manifold::new_with_values(&pos, &idx, &pos.chunks(3).map(f).collect::<Vec<_>>()).unwrap();
+        let p = Manifold::new_with_values(&pos, &idx, &idx.iter().map(|&i| f(&pos[3 * i..3 * i + 3])).collect::<Vec<_>>()).unwrap();
         let (pos, idx, _) = uv_cube_buf([0.3, 0.4, 0.5], 1., 0.);
-        let q = Manifold::new_with_values(&pos, &idx, &pos.chunks(3).map(f).collect::<Vec<_>>()).unwrap();
+        let q = Manifold::new_with_values(&pos, &idx, &idx.iter().map(|&i| f(&pos[3 * i..3 * i + 3])).collect::<Vec<_>>()).unwrap();
         for op in [OpType::Add, OpType::Subtract, OpType::Intersect] {
             let r = compute_boolean(&p, &q, op).unwrap();
             for (h, &v) in r.hs.iter().zip(&r.vals) {

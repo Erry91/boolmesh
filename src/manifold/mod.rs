@@ -40,7 +40,7 @@ impl<S: Data> Manifold<S> {
     pub fn new_with_values(pos: &[f64], idx: &[usize], val: &[S]) -> Result<Self, String> {
         if !pos.len().is_multiple_of(3) { return Err("pos must be a multiple of 3".into()); }
         if !idx.len().is_multiple_of(3) { return Err("idx must be a multiple of 3".into()); }
-        if !val.is_empty() && val.len() != pos.len() / 3 { return Err("val must hold one value per vertex".into()); }
+        if !val.is_empty() && val.len() != idx.len() { return Err("val must hold one value per corner".into()); }
 
         // dedup vertices
         let mut hash = HashMap::with_capacity(pos.len() / 3);
@@ -60,12 +60,12 @@ impl<S: Data> Manifold<S> {
         }
 
         // create halfedge container
-        for i in idx.chunks(3) {
+        for (t, i) in idx.chunks(3).enumerate() {
             let v = [rmap[i[0]], rmap[i[1]], rmap[i[2]]];
             if v[0] == v[1] || v[1] == v[2] || v[2] == v[0] { continue; }
-            hs.push(Half::new(v[0], v[1], usize::MAX, i[0]));
-            hs.push(Half::new(v[1], v[2], usize::MAX, i[1]));
-            hs.push(Half::new(v[2], v[0], usize::MAX, i[2]));
+            hs.push(Half::new(v[0], v[1], usize::MAX, 3 * t));
+            hs.push(Half::new(v[1], v[2], usize::MAX, 3 * t + 1));
+            hs.push(Half::new(v[2], v[0], usize::MAX, 3 * t + 2));
         }
 
         let mut mfd = Self::new_impl(weld, hs, val.to_vec(), None, None)?;

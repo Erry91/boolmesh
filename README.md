@@ -27,7 +27,7 @@ Note: Input meshes must be manifold, meaning they must not contain boundaries or
 let mfd_0 = Manifold::new(&positions_0, &indices_0).unwrap();
 let mfd_1 = Manifold::new(&positions_1, &indices_1).unwrap();
 
-// or meshes carrying one value per input vertex (uv, color, normal, ...)
+// or meshes carrying one value per triangle corner (uv, color, normal, ...): values_0[i] belongs to indices_0[i]
 let mfd_0 = Manifold::new_with_values(&positions_0, &indices_0, &values_0).unwrap();
 let mfd_1 = Manifold::new_with_values(&positions_1, &indices_1, &values_1).unwrap();
 

@@ -78,12 +78,8 @@ pub fn menger_sponge(n: usize) -> Manifold<Uv> {
     let rot = |rx: f64, ry: f64, rz: f64| {
         let r = boolmesh::Mat3::from_euler(glam::EulerRot::XYZ, rx as Real, ry as Real, rz as Real);
         let snap = |v: Real| if (v - 0.5).abs() < 1e-4 { 0.5 } else if (v + 0.5).abs() < 1e-4 { -0.5 } else { v as f64 };
-        let mut flat = vec![];
-        for h in holes_z.hs.iter() {
-            let p = r * holes_z.ps[h.tail];
-            flat.extend_from_slice(&[snap(p.x), snap(p.y), snap(p.z)]);
-        }
-        let idx = (0..holes_z.hs.len()).collect::<Vec<_>>();
+        let flat = holes_z.ps.iter().flat_map(|p| { let p = r * *p; [snap(p.x), snap(p.y), snap(p.z)] }).collect::<Vec<_>>();
+        let idx = holes_z.hs.iter().map(|h| h.tail).collect::<Vec<_>>();
         Manifold::new_with_values(&flat, &idx, &holes_z.vals).unwrap()
     };
 
@@ -108,15 +104,18 @@ fn cube(c: [f64; 3], s: [f64; 3], uv: fn(usize, [f64; 3]) -> Uv) -> Buf {
     let (mut pos, mut idx, mut uvs) = (vec![], vec![], vec![]);
     for k in 0..3 { for d in [1., 0.] {
         let base = pos.len() / 3;
+        let mut face = vec![];
         for (a, b) in [(0., 0.), (1., 0.), (1., 1.), (0., 1.)] {
             let mut q = [0.; 3];
             q[k] = d;
             q[(k + 1) % 3] = a;
             q[(k + 2) % 3] = b;
             pos.extend((0..3).map(|i| c[i] + s[i] * (q[i] - 0.5)));
-            uvs.push(uv(k, q));
+            face.push(uv(k, q));
         }
-        idx.extend(if d > 0. { [0, 1, 2, 0, 2, 3] } else { [0, 2, 1, 0, 3, 2] }.map(|i| base + i));
+        let tri = if d > 0. { [0, 1, 2, 0, 2, 3] } else { [0, 2, 1, 0, 3, 2] };
+        idx.extend(tri.map(|i| base + i));
+        uvs.extend(tri.map(|i| face[i]));
     }}
     (pos, idx, uvs)
 }
