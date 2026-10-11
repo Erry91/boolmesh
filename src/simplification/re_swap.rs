@@ -41,7 +41,7 @@ fn recursive_edge_swap<S: Data>(
     ps: &mut Vec<Vec3>,
     ns: &mut [Vec3],
     ts: &mut [Tref],
-    uv: &mut Vec<S>,
+    vs: &mut Vec<S>,
     hid: usize,
     tag: &mut i32,
     visit: &mut [i32],
@@ -117,7 +117,7 @@ fn recursive_edge_swap<S: Data>(
         swap_edge();
         if (u3 - u2).length_squared() < tol * tol {
             *tag += 1;
-            collapse_edge(hs, ps, ns, ts, t0e.2, !uv.is_empty(), tol, edges);
+            collapse_edge(hs, ps, ns, ts, t0e.2, !vs.is_empty(), tol, edges);
             edges.clear();
         } else {
             visit[h0] = *tag;
@@ -139,7 +139,7 @@ pub fn swap_degenerates<S: Data>(
     ps: &mut Vec<Vec3>,
     ns: &mut [Vec3],
     ts: &mut [Tref],
-    uv: &mut Vec<S>,
+    vs: &mut Vec<S>,
     oft: usize,
     tol: Real
 ) {
@@ -157,9 +157,9 @@ pub fn swap_degenerates<S: Data>(
     for hid in rec {
         _flag += 1;
         tag += 1;
-        recursive_edge_swap(hs, ps, ns, ts, uv, hid, &mut tag, &mut visit, &mut stack, &mut buff, tol);
+        recursive_edge_swap(hs, ps, ns, ts, vs, hid, &mut tag, &mut visit, &mut stack, &mut buff, tol);
         while let Some(last) = stack.pop() {
-            recursive_edge_swap(hs, ps, ns, ts, uv, last, &mut tag, &mut visit, &mut stack, &mut buff, tol);
+            recursive_edge_swap(hs, ps, ns, ts, vs, last, &mut tag, &mut visit, &mut stack, &mut buff, tol);
         }
     }
     #[cfg(feature = "verbose")]

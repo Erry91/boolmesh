@@ -51,7 +51,7 @@ pub fn collapse_edge(
     ns: &mut [Vec3],
     rs: &mut [Tref],
     hid: usize,
-    prp: bool,
+    val: bool,
     eps: Real,
     store: &mut Vec<usize>, // storing the halfedge data for form_loops
 ) -> bool {
@@ -138,7 +138,7 @@ pub fn collapse_collinear_edges(
     ns: &mut [Vec3],
     rs: &mut [Tref],
     nv: usize,
-    prp: bool,
+    val: bool,
     eps: Real,
 ) {
     let mut _flag = 0;
@@ -146,7 +146,7 @@ pub fn collapse_collinear_edges(
         .filter(|&hid| record_if_collinear(hs, rs, hid, nv))
         .collect::<Vec<_>>();
     for hid in rec {
-        if collapse_edge(hs, ps, ns, rs, hid, prp, eps, &mut vec![]) { _flag += 1; }
+        if collapse_edge(hs, ps, ns, rs, hid, val, eps, &mut vec![]) { _flag += 1; }
     }
 
     #[cfg(feature = "verbose")]
@@ -159,7 +159,7 @@ pub fn collapse_short_edges(
     ns: &mut [Vec3],
     rs: &mut [Tref],
     nv: usize,
-    prp: bool,
+    val: bool,
     eps: Real,
 ) {
     loop {
@@ -168,7 +168,7 @@ pub fn collapse_short_edges(
             .filter(|&hid| record_if_short(hs, ps, hid, nv, eps))
             .collect::<Vec<_>>();
         for hid in rec {
-            if collapse_edge(hs, ps, ns, rs, hid, prp, eps, &mut vec![]) { flag += 1; }
+            if collapse_edge(hs, ps, ns, rs, hid, val, eps, &mut vec![]) { flag += 1; }
         }
         if flag == 0 { break; }
 
