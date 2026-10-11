@@ -3,21 +3,19 @@
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
 [![Crates.io](https://img.shields.io/crates/v/boolmesh.svg)](https://crates.io/crates/boolmesh)
 [![Docs.rs](https://img.shields.io/docsrs/boolmesh)](https://docs.rs/boolmesh)
+[![Test](https://github.com/komietty/boolmesh/actions/workflows/test.yml/badge.svg)](https://github.com/komietty/boolmesh/actions/workflows/test.yml)
 
-![demo](https://raw.githubusercontent.com/komietty/boolmesh/main/examples/demo.png)
+![ms](https://raw.githubusercontent.com/komietty/boolmesh/main/examples/menger_sponge.png)
 Boolmesh is a pure Rust library for performing robust and efficient mesh boolean operations. It is a full-from-scratch Rust implementation inspired by [Elalish’s Manifold](https://manifoldcad.org/docs/html/classmanifold_1_1_manifold.html), which is well known for its robustness and is now part of OpenSCAD.
 
-The codebase is clean and minimal, with dependencies only on `glam`—which provides SIMD acceleration—and optionally on `rayon` for multi-threading support. Besides being robust, Boolmesh is also very fast. For example, generating a Menger Sponge of depth 4 (the model shown on the right) takes only around 8 seconds on an Apple Silicon M4 using single-threading, and around 4 seconds with multi-threading enabled. Also, the library supports both 32-bit and 64-bit floating point arithmetic.
+The codebase is clean and minimal, with dependencies only on `glam`—which provides SIMD acceleration—and optionally on `rayon` for multi-threading support. Besides being robust, Boolmesh is also very fast. For example, generating a Menger Sponge of depth 4 (the model shown above) takes only around 8 seconds on an Apple Silicon M4 using single-threading, and around 4 seconds with multi-threading enabled. Also, the library supports both 32-bit and 64-bit floating point arithmetic.
 
 ## Carry any data through booleans
 
-The useful point of boolmesh is that you can attach any value to a mesh and it survives the boolean. UVs, vertex colors, normals, scalar fields, matrices, or your own struct: anything that can be added and scaled by a real number (`Clone + PartialEq + Default + Add + Mul<Real>`) works out of the box, because `Manifold<S>` is generic over the value type.
+The useful point of boolmesh is that you can attach any value to a mesh and it survives the boolean. UVs, colors, normals, matrices, or your own struct: anything that can be added and scaled by a real number (`Clone + PartialEq + Default + Add + Mul<Real>`) works, since `Manifold<S>` is generic over the value type. Vertices created along the cut get values interpolated from the original faces, and seams such as UV borders stay sharp.
 
-- **Interpolated where the mesh is cut.** Vertices created along intersection curves receive values blended from the original face they lie on.
-- **Seams stay sharp.** Every triangle corner keeps its own value, so UV seams, material borders and the boundary between the two input meshes are preserved instead of being smeared.
-- **Exact through cleanup.** Values are tracked through the internal simplification (edge collapses and swaps), not resampled afterwards.
+![uv](https://raw.githubusercontent.com/komietty/boolmesh/main/examples/value_inheritance.gif)
 
-The Menger sponge example shows it in action: a texture on the outer skin and another one inside the tunnels are both carried through three subtractions.
 
 ## Usage
 The usage is intentionally simple, as the library exposes only one main function for end users. To perform a boolean operation, construct a mesh buffer structure (called a `Manifold`) from vertex positions and face indices, then call `compute_boolean()` to obtain the result.
