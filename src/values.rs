@@ -44,7 +44,7 @@ pub fn annotate<S: Data>(
     mq: &Manifold<S>,
     eps: Real,
 ) -> Vec<S> {
-    if mp.vs.is_empty() && mq.vs.is_empty() { return vec![]; }
+    if mp.vals.is_empty() && mq.vals.is_empty() { return vec![]; }
 
     let none = usize::MAX;
     let mut vs = vec![];
@@ -56,20 +56,21 @@ pub fn annotate<S: Data>(
         let pq = r.mid == 0;
         let m = if pq { mp } else { mq };
         let old = |j: usize| m.hs[3 * r.fid + j].prop;
+        let val = |j: usize| m.vals[3 * r.fid + j].clone();
         let pos = [0, 1, 2].map(|j| m.ps[m.hs[3 * r.fid + j].tail]);
 
         for i in 0..3 {
             let h = 3 * tri + i;
             let v = hs[h].tail;
             let r = get_barycentric_ratio(&ps[v], &pos, eps);
-            let w = |j: usize| m.vs[old(j)].clone() * r[j];
-            let k = if m.vs.is_empty() { (pq, none, none, none) }
+            let w = |j: usize| val(j) * r[j];
+            let k = if m.vals.is_empty() { (pq, none, none, none) }
                     else if let Some(j) = (0..3).find(|&j| r[j] == 1.) { (pq, none, old(j), none) }
                     else if let Some(j) = (0..3).rev().find(|&j| r[j] == 0.) { let (a, b) = (old(nxt(j)), old(prv(j))); (pq, v, a.min(b), a.max(b)) }
                     else { (pq, v, none, none) };
 
             hs[h].prop = *shared.entry(k).or_insert_with(|| {
-                vs.push(if m.vs.is_empty() { S::default() } else { w(0) + w(1) + w(2) });
+                vs.push(if m.vals.is_empty() { S::default() } else { w(0) + w(1) + w(2) });
                 vs.len() - 1
             });
         }

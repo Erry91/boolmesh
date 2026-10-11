@@ -634,9 +634,9 @@ mod test_values {
     fn cube(min: [f64; 3], size: f64, offset: f64) -> Cube { Cube { min, size, offset: Some(offset) } }
 
     fn check_corner_uvs(m: &Manifold<Vec2>, cubes: &[Cube], tol: f64) {
-        assert!(m.hs.iter().all(|h| h.prop < m.vs.len()));
+        assert_eq!(m.vals.len(), m.hs.len());
         let corner = |i: usize| {
-            let (p, uv) = (m.ps[m.hs[i].tail], m.vs[m.hs[i].prop]);
+            let (p, uv) = (m.ps[m.hs[i].tail], m.vals[i]);
             ([p.x as f64, p.y as f64, p.z as f64], [uv.x as f64, uv.y as f64])
         };
         for t in 0..m.nf {
@@ -671,7 +671,7 @@ mod test_values {
     fn test_values_input() {
         let m = uv_cube([0., 0., 0.], 1., 0.);
         assert_eq!((m.nv, m.nf), (8, 12));
-        assert_eq!(m.vs.len(), 24);
+        assert_eq!(m.vals.len(), 36);
         assert!((volume(&m) - 1.).abs() < tol());
         let mut per_vert = vec![std::collections::BTreeSet::new(); m.nv];
         for h in &m.hs { per_vert[h.tail].insert(h.prop); }
@@ -683,7 +683,7 @@ mod test_values {
     fn test_values_none() {
         let (pos, idx, _) = uv_cube_buf([0., 0., 0.], 1., 0.);
         let m = Manifold::<Vec2>::new_with_values(&pos, &idx, &[]).unwrap();
-        assert!(m.vs.is_empty());
+        assert!(m.vals.is_empty());
         assert!(m.hs.iter().all(|h| h.prop == h.tail));
         let n = uv_cube([0., 0., 0.], 1., 0.);
         assert_eq!((n.nv, n.nf, n.nh), (m.nv, m.nf, m.nh));
@@ -702,10 +702,10 @@ mod test_values {
         let q = Manifold::new_with_values(&pos, &idx, &pos.chunks(3).map(f).collect::<Vec<_>>()).unwrap();
         for op in [OpType::Add, OpType::Subtract, OpType::Intersect] {
             let r = compute_boolean(&p, &q, op).unwrap();
-            for h in &r.hs {
+            for (h, &v) in r.hs.iter().zip(&r.vals) {
                 let x = r.ps[h.tail];
                 let e = f(&[x.x as f64, x.y as f64, x.z as f64]);
-                assert!(((r.vs[h.prop] - e) as f64).abs() < tol(), "{} != {e}", r.vs[h.prop]);
+                assert!(((v - e) as f64).abs() < tol(), "{v} != {e}");
             }
         }
     }
@@ -715,7 +715,7 @@ mod test_values {
         let p = uv_cube([0., 0., 0.], 1., 0.);
         let q = uv_cube([3., 0., 0.], 1., 40.);
         let r = compute_boolean(&p, &q, OpType::Add).unwrap();
-        assert!(!r.vs.is_empty());
+        assert!(!r.vals.is_empty());
         assert!((volume(&r) - 2.).abs() < tol());
         check_corner_uvs(&r, &[cube([0., 0., 0.], 1., 0.), cube([3., 0., 0.], 1., 40.)], tol());
     }
@@ -727,7 +727,7 @@ mod test_values {
         let cubes = [cube([0., 0., 0.], 1., 0.), cube([0.5, 0.5, 0.5], 1., 40.)];
         for (op, vol) in [(OpType::Add, 2. - 0.125), (OpType::Subtract, 1. - 0.125), (OpType::Intersect, 0.125)] {
             let r = compute_boolean(&p, &q, op).unwrap();
-            assert!(!r.vs.is_empty());
+            assert!(!r.vals.is_empty());
             assert!((volume(&r) - vol).abs() < tol(), "volume {} != {vol}", volume(&r));
             check_corner_uvs(&r, &cubes, tol());
         }
@@ -741,7 +741,7 @@ mod test_values {
             let cubes = [cube([0., 0., 0.], 1., 0.), cube(min, 1., 40.)];
             for (op, vol) in [(OpType::Add, add), (OpType::Subtract, sub)] {
                 let r = compute_boolean(&p, &q, op).unwrap();
-                assert!(!r.vs.is_empty());
+                assert!(!r.vals.is_empty());
                 assert!((volume(&r) - vol).abs() < tol(), "min = {min:?}: volume {} != {vol}", volume(&r));
                 check_corner_uvs(&r, &cubes, tol());
             }
@@ -756,7 +756,7 @@ mod test_values {
         let cubes = [cube([0., 0., 0.], 1., 0.), Cube { min: [0.5, 0.5, 0.5], size: 1., offset: None }];
         for op in [OpType::Add, OpType::Subtract, OpType::Intersect] {
             let r = compute_boolean(&p, &q, op).unwrap();
-            assert!(!r.vs.is_empty());
+            assert!(!r.vals.is_empty());
             check_corner_uvs(&r, &cubes, tol());
         }
     }

@@ -19,7 +19,6 @@ use super::hmesh::Hmesh;
 pub struct Manifold<S = Real>  {
     pub ps: Vec<Vec3>,            // positions
     pub hs: Vec<Half>,            // halfedges
-    pub vs: Vec<S>,               // values on each corner (num of faces * 3)
     pub nv: usize,                // number of vertices
     pub nf: usize,                // number of faces
     pub nh: usize,                // number of halfedges
@@ -28,6 +27,7 @@ pub struct Manifold<S = Real>  {
     pub tol: Real,                // tolerance
     pub fns: Vec<Vec3>,           // face normals
     pub vns: Vec<Vec3>,           // vert normals
+    pub vals: Vec<S>,             // values on each corner (num of faces * 3)
     pub collider: MortonCollider, //
     pub coplanar: Vec<i32>,       // indices of coplanar faces
 }
@@ -69,14 +69,14 @@ impl<S: Data> Manifold<S> {
         }
 
         let mut mfd = Self::new_impl(weld, hs, val.to_vec(), None, None)?;
-        if !mfd.vs.is_empty() { compact_values(&mut mfd.hs, &mut mfd.vs, true); }
+        if !mfd.vals.is_empty() { dedupe_values(&mut mfd.hs, &mfd.vals); }
         Ok(mfd)
     }
 
     pub(crate) fn new_impl(
         ps: Vec<Vec3>,
         hs: Vec<Half>,
-        mut vs: Vec<S>,
+        vs: Vec<S>,
         eps: Option<Real>,
         tol: Option<Real>,
     ) -> Result<Self, String> {
@@ -87,8 +87,8 @@ impl<S: Data> Manifold<S> {
         let prop = |i: usize| hs[3 * map[i / 3] + i % 3].prop;
         let mut hs = hm.half.iter().map(|&i| Half::with_prop(hm.tail[i], hm.head[i], hm.twin[i], prop(i))).collect::<Vec<_>>();
 
-        if !vs.is_empty() { compact_values(&mut hs, &mut vs, false); }
-        else { for h in hs.iter_mut() { h.prop = h.tail; } }
+        if vs.is_empty() { for h in hs.iter_mut() { h.prop = h.tail; } }
+        let vals = if vs.is_empty() { vec![] } else { hs.iter().map(|h| vs[h.prop].clone()).collect() };
 
         let mut e = K_PRECISION * bb.scale();
         e = if e.is_finite() { e } else { -1. };
@@ -97,7 +97,7 @@ impl<S: Data> Manifold<S> {
         let collider = MortonCollider::new(&f_bb, &f_mt);
         let coplanar = compute_coplanar_idx(&ps, &hm.fns, &hs, eps);
 
-        let mfd = Manifold { hs, ps, vs, nv: hm.nv, nf: hm.nf, nh: hm.nh, bb, vns: hm.vns, fns: hm.fns, eps, tol, collider, coplanar };
+        let mfd = Manifold { hs, ps, vals, nv: hm.nv, nf: hm.nf, nh: hm.nh, bb, vns: hm.vns, fns: hm.fns, eps, tol, collider, coplanar };
         if !mfd.is_manifold() { return Err("The input mesh is not manifold".into()); }
         Ok(mfd)
     }
@@ -256,22 +256,16 @@ pub(crate) fn cleanup_unused_verts(
     *hs = hs.iter().filter(|h| h.pair().is_some()).cloned().collect();
 }
 
-fn compact_values<S: Data>(hs: &mut [Half], vs: &mut Vec<S>, dedupe: bool) {
-    let nv = vs.len();
-    let mut root = (0..nv).collect::<Vec<_>>();
-    let mut keep = vec![0usize; nv];
-    let mut map  = vec![0usize; nv + 1];
+fn dedupe_values<S: Data>(hs: &mut [Half], vs: &[S]) {
+    let mut root = (0..=hs.iter().map(|h| h.prop).max().unwrap_or(0)).collect::<Vec<_>>();
     fn find(r: &mut [usize], mut i: usize) -> usize { while r[i] != i { r[i] = r[r[i]]; i = r[i]; } i }
 
     for e in 0..hs.len() {
-        if !dedupe || hs[e].pair == usize::MAX { continue; }
-        let (p0, p1) = (hs[e].prop, hs[next_of(hs[e].pair)].prop);
-        if vs[p0] == vs[p1] { let (a, b) = (find(&mut root, p0), find(&mut root, p1)); root[a.min(b)] = a.max(b); }
+        if hs[e].pair == usize::MAX { continue; }
+        let f = next_of(hs[e].pair);
+        if vs[e] == vs[f] { let (a, b) = (find(&mut root, hs[e].prop), find(&mut root, hs[f].prop)); root[a.min(b)] = a.max(b); }
     }
 
-    for h in hs.iter_mut() { h.prop = find(&mut root, h.prop); keep[h.prop] = 1; }
-    for i in 0..nv { map[i + 1] = map[i] + keep[i]; }
-    for h in hs.iter_mut() { h.prop = map[h.prop]; }
-    *vs = (0..nv).filter(|&i| keep[i] == 1).map(|i| vs[i].clone()).collect();
+    for h in hs.iter_mut() { h.prop = find(&mut root, h.prop); }
 }
 
