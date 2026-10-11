@@ -44,10 +44,10 @@ pub fn annotate<S: Data>(
     mq: &Manifold<S>,
     eps: Real,
 ) -> Vec<S> {
-    if mp.uvs.is_empty() && mq.uvs.is_empty() { return vec![]; }
+    if mp.vs.is_empty() && mq.vs.is_empty() { return vec![]; }
 
     let none = usize::MAX;
-    let mut uvs = vec![];
+    let mut vs = vec![];
     let mut shared = HashMap::new();
 
     for tri in 0..hs.len() / 3 {
@@ -62,17 +62,17 @@ pub fn annotate<S: Data>(
             let h = 3 * tri + i;
             let v = hs[h].tail;
             let r = get_barycentric_ratio(&ps[v], &pos, eps);
-            let w = |j: usize| m.uvs[old(j)].clone() * r[j];
-            let k = if m.uvs.is_empty() { (pq, none, none, none) }
+            let w = |j: usize| m.vs[old(j)].clone() * r[j];
+            let k = if m.vs.is_empty() { (pq, none, none, none) }
                     else if let Some(j) = (0..3).find(|&j| r[j] == 1.) { (pq, none, old(j), none) }
                     else if let Some(j) = (0..3).rev().find(|&j| r[j] == 0.) { let (a, b) = (old(nxt(j)), old(prv(j))); (pq, v, a.min(b), a.max(b)) }
                     else { (pq, v, none, none) };
 
             hs[h].prop = *shared.entry(k).or_insert_with(|| {
-                uvs.push(if m.uvs.is_empty() { S::default() } else { w(0) + w(1) + w(2) });
-                uvs.len() - 1
+                vs.push(if m.vs.is_empty() { S::default() } else { w(0) + w(1) + w(2) });
+                vs.len() - 1
             });
         }
     }
-    uvs
+    vs
 }

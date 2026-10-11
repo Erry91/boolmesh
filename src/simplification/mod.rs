@@ -14,7 +14,7 @@ pub fn simplify_topology<S: Data>(
     ps: &mut Vec<Vec3>,
     ns: &mut Vec<Vec3>,
     rs: &mut Vec<Tref>,
-    uv: &mut Vec<S>,
+    vs: &mut Vec<S>,
     nv_from_p: usize,
     nv_from_q: usize,
     eps: Real,
@@ -22,9 +22,9 @@ pub fn simplify_topology<S: Data>(
     let nv = nv_from_p + nv_from_q;
     split_pinched_vert(hs, ps);
     dedupe_edges(ps, hs, ns, rs);
-    collapse_short_edges(hs, ps, ns,     rs, nv, !uv.is_empty(), eps);
-    collapse_collinear_edges(hs, ps, ns, rs, nv, !uv.is_empty(), eps);
-    swap_degenerates(hs, ps, ns, rs, uv, nv, eps);
+    collapse_short_edges(hs, ps, ns,     rs, nv, !vs.is_empty(), eps);
+    collapse_collinear_edges(hs, ps, ns, rs, nv, !vs.is_empty(), eps);
+    swap_degenerates(hs, ps, ns, rs, vs, nv, eps);
 }
 
 fn head_of(hs: &[Half], i: usize) -> usize { hs[i].head }

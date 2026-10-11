@@ -9,7 +9,7 @@ mod manifold;
 mod triangulation;
 mod simplification;
 mod common;
-mod props;
+mod values;
 mod boolean03;
 mod boolean45;
 mod tests;
@@ -19,7 +19,7 @@ use crate::boolean45::boolean45;
 use crate::simplification::simplify_topology;
 use crate::triangulation::triangulate;
 use crate::common::*;
-use crate::props::*;
+use crate::values::*;
 use crate::manifold::*;
 
 pub use crate::common::{Real, Vec2, Vec3, Vec4, Mat3, K_PRECISION};

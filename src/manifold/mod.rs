@@ -19,13 +19,13 @@ use super::hmesh::Hmesh;
 pub struct Manifold<S = Real>  {
     pub ps: Vec<Vec3>,            // positions
     pub hs: Vec<Half>,            // halfedges
-    pub uvs: Vec<S>,              // values on each corners
-    pub eps: Real,                // epsilon
-    pub tol: Real,                // tolerance
+    pub vs: Vec<S>,               // values on each corner (num of faces * 3)
     pub nv: usize,                // number of vertices
     pub nf: usize,                // number of faces
     pub nh: usize,                // number of halfedges
     pub bb: BBox,                 // bounding box
+    pub eps: Real,                // epsilon
+    pub tol: Real,                // tolerance
     pub fns: Vec<Vec3>,           // face normals
     pub vns: Vec<Vec3>,           // vert normals
     pub collider: MortonCollider, //
@@ -33,14 +33,14 @@ pub struct Manifold<S = Real>  {
 }
 
 impl Manifold {
-    pub fn new(pos: &[f64], idx: &[usize]) -> Result<Self, String> { Self::new_with_props(pos, idx, &[]) }
+    pub fn new(pos: &[f64], idx: &[usize]) -> Result<Self, String> { Self::new_with_values(pos, idx, &[]) }
 }
 
 impl<S: Data> Manifold<S> {
-    pub fn new_with_props(pos: &[f64], idx: &[usize], val: &[S]) -> Result<Self, String> {
+    pub fn new_with_values(pos: &[f64], idx: &[usize], val: &[S]) -> Result<Self, String> {
         if !pos.len().is_multiple_of(3) { return Err("pos must be a multiple of 3".into()); }
         if !idx.len().is_multiple_of(3) { return Err("idx must be a multiple of 3".into()); }
-        if !val.is_empty() && val.len() != pos.len() / 3 { return Err("uv must hold one value per vertex".into()); }
+        if !val.is_empty() && val.len() != pos.len() / 3 { return Err("val must hold one value per vertex".into()); }
 
         // dedup vertices
         let mut hash = HashMap::with_capacity(pos.len() / 3);
@@ -59,6 +59,7 @@ impl<S: Data> Manifold<S> {
             }
         }
 
+        // create halfedge container
         for i in idx.chunks(3) {
             let v = [rmap[i[0]], rmap[i[1]], rmap[i[2]]];
             if v[0] == v[1] || v[1] == v[2] || v[2] == v[0] { continue; }
@@ -68,14 +69,14 @@ impl<S: Data> Manifold<S> {
         }
 
         let mut mfd = Self::new_impl(weld, hs, val.to_vec(), None, None)?;
-        if !mfd.uvs.is_empty() { compact_props(&mut mfd.hs, &mut mfd.uvs, true); }
+        if !mfd.vs.is_empty() { compact_values(&mut mfd.hs, &mut mfd.vs, true); }
         Ok(mfd)
     }
 
     pub(crate) fn new_impl(
         ps: Vec<Vec3>,
         hs: Vec<Half>,
-        mut uvs: Vec<S>,
+        mut vs: Vec<S>,
         eps: Option<Real>,
         tol: Option<Real>,
     ) -> Result<Self, String> {
@@ -86,7 +87,7 @@ impl<S: Data> Manifold<S> {
         let prop = |i: usize| hs[3 * map[i / 3] + i % 3].prop;
         let mut hs = hm.half.iter().map(|&i| Half::with_prop(hm.tail[i], hm.head[i], hm.twin[i], prop(i))).collect::<Vec<_>>();
 
-        if !uvs.is_empty() { compact_props(&mut hs, &mut uvs, false); }
+        if !vs.is_empty() { compact_values(&mut hs, &mut vs, false); }
         else { for h in hs.iter_mut() { h.prop = h.tail; } }
 
         let mut e = K_PRECISION * bb.scale();
@@ -96,7 +97,7 @@ impl<S: Data> Manifold<S> {
         let collider = MortonCollider::new(&f_bb, &f_mt);
         let coplanar = compute_coplanar_idx(&ps, &hm.fns, &hs, eps);
 
-        let mfd = Manifold { hs, ps, uvs, nv: hm.nv, nf: hm.nf, nh: hm.nh, bb, vns: hm.vns, fns: hm.fns, eps, tol, collider, coplanar };
+        let mfd = Manifold { hs, ps, vs, nv: hm.nv, nf: hm.nf, nh: hm.nh, bb, vns: hm.vns, fns: hm.fns, eps, tol, collider, coplanar };
         if !mfd.is_manifold() { return Err("The input mesh is not manifold".into()); }
         Ok(mfd)
     }
@@ -255,8 +256,8 @@ pub(crate) fn cleanup_unused_verts(
     *hs = hs.iter().filter(|h| h.pair().is_some()).cloned().collect();
 }
 
-fn compact_props<S: Data>(hs: &mut [Half], uv: &mut Vec<S>, dedupe: bool) {
-    let nv = uv.len();
+fn compact_values<S: Data>(hs: &mut [Half], vs: &mut Vec<S>, dedupe: bool) {
+    let nv = vs.len();
     let mut root = (0..nv).collect::<Vec<_>>();
     let mut keep = vec![0usize; nv];
     let mut map  = vec![0usize; nv + 1];
@@ -265,12 +266,12 @@ fn compact_props<S: Data>(hs: &mut [Half], uv: &mut Vec<S>, dedupe: bool) {
     for e in 0..hs.len() {
         if !dedupe || hs[e].pair == usize::MAX { continue; }
         let (p0, p1) = (hs[e].prop, hs[next_of(hs[e].pair)].prop);
-        if uv[p0] == uv[p1] { let (a, b) = (find(&mut root, p0), find(&mut root, p1)); root[a.min(b)] = a.max(b); }
+        if vs[p0] == vs[p1] { let (a, b) = (find(&mut root, p0), find(&mut root, p1)); root[a.min(b)] = a.max(b); }
     }
 
     for h in hs.iter_mut() { h.prop = find(&mut root, h.prop); keep[h.prop] = 1; }
     for i in 0..nv { map[i + 1] = map[i] + keep[i]; }
     for h in hs.iter_mut() { h.prop = map[h.prop]; }
-    *uv = (0..nv).filter(|&i| keep[i] == 1).map(|i| uv[i].clone()).collect();
+    *vs = (0..nv).filter(|&i| keep[i] == 1).map(|i| vs[i].clone()).collect();
 }
 
