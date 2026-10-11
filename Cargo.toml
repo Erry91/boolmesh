@@ -2,7 +2,7 @@
 name = "boolmesh"
 version = "0.1.10"
 edition = "2024"
-description = "Robust 3D mesh boolean library"
+description = "Robust 3D mesh boolean library in pure Rust"
 rust-version = "1.87"
 license = "MPL-2.0"
 readme = "README.md"

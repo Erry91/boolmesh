@@ -96,6 +96,18 @@ fn recursive_edge_swap<S: Data>(
         ns[t0] = ns[t1];
         ts[t0] = ts[t1];
 
+        let l01 = (u1 - u0).length();
+        let l02 = (u2 - u0).length();
+        if !vs.is_empty() {
+            let a = (l02 / l01).min(1.).max(0.);
+            let p = vs.len();
+            vs.push(vs[hs[t1e.0].prop].clone() * a + vs[hs[t1e.1].prop].clone() * (1. - a));
+            hs[t0e.0].prop = hs[t1e.2].prop;
+            hs[t0e.1].prop = hs[t1e.0].prop;
+            hs[t0e.2].prop = p;
+            hs[t1e.0].prop = p;
+        }
+
         // If the new edge already exists, duplicate the verts and split the mesh.
         let mut h = pair_of(hs, t1e.0);
         let head  = head_of(hs, t1e.1);

@@ -114,7 +114,11 @@ pub fn collapse_edge(
 
     let mut cur = bgn;
     while cur != end {
-        cur      = next_of(cur);
+        cur = next_of(cur);
+        if val {
+            if      is_coplanar(&rs[cur / 3], &rs[hid  / 3]) { hs[cur].prop = hs[next_of(hid)].prop; }
+            else if is_coplanar(&rs[cur / 3], &rs[t1.0 / 3]) { hs[cur].prop = hs[t1.0].prop; }
+        }
         let pair = pair_of(hs, cur);
         let head = head_of(hs, cur);
         if let Some((i, &v)) = store.iter().enumerate().find(|&(_, &s)| head_of(hs, s) == head) {

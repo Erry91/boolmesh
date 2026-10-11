@@ -19,6 +19,7 @@ fn dedupe_edge(
     // For here we do not care either the tail vert is attached or not (care it in the 3rd step).
     let tail = hs[hid].tail;
     let head = hs[hid].head;
+    let val = hs[next_of(hid)].prop;
     let opp = hs[next_of(hid)].pair;
     let mut cur = hs[next_of(hid)].pair;
     while cur != hid {
@@ -30,17 +31,17 @@ fn dedupe_edge(
 
             let nh = hs.len();
             let pair = hs[cur].pair;
-            hs.push(Half::new_without_pair(head, copy));
-            hs.push(Half::new_without_pair(copy, tail_of(hs, cur)));
-            hs.push(Half::new_without_pair(tail_of(hs, cur), head));
+            hs.push(Half::with_prop(head, copy, usize::MAX, val));
+            hs.push(Half::with_prop(copy, tail_of(hs, cur), usize::MAX, val));
+            hs.push(Half::with_prop(tail_of(hs, cur), head, usize::MAX, hs[cur].prop));
             pair_up(hs, nh + 2, pair);
             pair_up(hs, nh + 1, cur);
 
             let nh = hs.len();
             let pair = hs[opp].pair;
-            hs.push(Half::new_without_pair(copy, head));
-            hs.push(Half::new_without_pair(head, tail_of(hs, opp)));
-            hs.push(Half::new_without_pair(tail_of(hs, opp), copy));
+            hs.push(Half::with_prop(copy, head, usize::MAX, val));
+            hs.push(Half::with_prop(head, tail_of(hs, opp), usize::MAX, val));
+            hs.push(Half::with_prop(tail_of(hs, opp), copy, usize::MAX, hs[opp].prop));
             pair_up(hs, nh + 2, pair);
             pair_up(hs, nh + 1, opp);
 
@@ -62,9 +63,6 @@ fn dedupe_edge(
         // Separate topological unit needs no new faces to be split
         let new_vert = ps.len();
         ps.push(ps[head]);
-        // Duplicate per-face data if present
-        ns.push(ns[head]);
-        rs.push(rs[head]);
         // Rewire the entire star around NextHalfedge(current) to new_vert
         let start = next_of(cur);
         let mut e = start;
@@ -87,9 +85,6 @@ fn dedupe_edge(
         // Split the pinched vert the previous split created.
         let new_vert = ps.len();
         ps.push(ps[head]);
-        // Duplicate per-face data if present
-        ns.push(ns[head]);
-        rs.push(rs[head]);
         let bgn = next_of(curr);
         let mut e = bgn;
         loop {
