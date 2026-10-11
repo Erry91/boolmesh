@@ -90,7 +90,7 @@ fn remove_if_folded(
     for j in [j0, j1, j2] { hs[j] = Half::default(); }
 }
 
-fn split_pinched_vert(
+pub(crate) fn split_pinched_vert(
     hs: &mut [Half],
     ps: &mut Vec<Vec3>
 ) {

@@ -7,7 +7,7 @@ use crate::bounds::{union_bbs, BBox, Query};
 pub const K_NO_CODE: u32 = 0xFFFFFFFF;
 const K_INITIAL_LENGTH: i32 = 128;
 const K_LENGTH_MULTIPLE: i32 = 4;
-const K_ROOT: i32 = 1;
+pub(crate) const K_ROOT: i32 = 1;
 
 fn spread_bits_3(v: u32) -> u32 {
     assert!(v <= 1023);
@@ -29,8 +29,8 @@ pub fn morton_code(p: &Vec3, bb: &BBox) -> u32 {
     x * 4 + y * 2 + z
 }
 
-fn node2intl(node: i32) -> Option<i32> { if node % 2 == 1 { Some((node - 1) / 2) } else { None } }
-fn node2leaf(node: i32) -> Option<i32> { if node % 2 == 0 { Some(node / 2) } else { None } }
+pub(crate) fn node2intl(node: i32) -> Option<i32> { if node % 2 == 1 { Some((node - 1) / 2) } else { None } }
+pub(crate) fn node2leaf(node: i32) -> Option<i32> { if node % 2 == 0 { Some(node / 2) } else { None } }
 fn intl2node(intl: i32) -> i32 { intl * 2 + 1 }
 fn leaf2node(leaf: i32) -> i32 { leaf * 2 }
 fn prefix_length(a: u32, b: u32) -> u32 { (a ^ b).leading_zeros() }
