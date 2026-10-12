@@ -6,8 +6,8 @@ use std::time::Instant;
 use bevy::prelude::*;
 use bevy::asset::RenderAssetUsages;
 use bevy::light::CascadeShadowConfigBuilder;
+use bevy::input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll, MouseScrollUnit};
 use bevy::render::render_resource::{Extent3d, PrimitiveTopology, TextureDimension, TextureFormat};
-use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
 use boolmesh::prelude::*;
 use boolmesh::Real;
 
@@ -17,8 +17,8 @@ type Buf = (Vec<f64>, Vec<usize>, Vec<Uv>);
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugins(PanOrbitCameraPlugin)
         .add_systems(Startup, setup)
+        .add_systems(Update, orbit)
         .run();
 }
 
@@ -40,8 +40,12 @@ fn setup(
         Transform::from_xyz(2., 3., 1.5).looking_at(Vec3::ZERO, Vec3::Y),
         CascadeShadowConfigBuilder { maximum_distance: 6., first_cascade_far_bound: 3., ..default() }.build(),
     ));
-    let focus = Vec3::new(0., -0.14, 0.);
-    cmds.spawn((Transform::from_translation(focus + Vec3::new(1.6, 1.1, 1.6)).looking_at(focus, Vec3::Y), PanOrbitCamera { focus, ..default() }));
+    let (focus, offset) = (Vec3::new(0., -0.14, 0.), Vec3::new(1.6, 1.1, 1.6));
+    cmds.spawn((
+        Camera3d::default(),
+        Transform::from_translation(focus + offset).looking_at(focus, Vec3::Y),
+        Orbit { focus, yaw: offset.x.atan2(offset.z), pitch: (offset.y / offset.length()).asin(), radius: offset.length() },
+    ));
 
     let (mut pos, mut vns, mut uvs) = (vec![], vec![], vec![]);
     for ((hs, vs), n) in res.hs.chunks(3).zip(res.vals.chunks(3)).zip(&res.fns) {
@@ -66,6 +70,28 @@ fn setup(
             ..default()
         })),
     ));
+}
+
+// Left drag to orbit around the focus, scroll to zoom.
+#[derive(Component)]
+struct Orbit { focus: Vec3, yaw: f32, pitch: f32, radius: f32 }
+
+fn orbit(
+    mut cams: Query<(&mut Orbit, &mut Transform)>,
+    buttons: Res<ButtonInput<MouseButton>>,
+    motion: Res<AccumulatedMouseMotion>,
+    scroll: Res<AccumulatedMouseScroll>,
+) {
+    let zoom = match scroll.unit { MouseScrollUnit::Line => scroll.delta.y * 0.1, MouseScrollUnit::Pixel => scroll.delta.y * 0.005 };
+    for (mut o, mut t) in cams.iter_mut() {
+        if buttons.pressed(MouseButton::Left) {
+            o.yaw -= motion.delta.x * 0.005;
+            o.pitch = (o.pitch + motion.delta.y * 0.005).clamp(-1.5, 1.5);
+        }
+        o.radius = (o.radius * (1. - zoom)).clamp(0.2, 10.);
+        let dir = Quat::from_euler(EulerRot::YXZ, o.yaw, -o.pitch, 0.) * Vec3::Z;
+        *t = Transform::from_translation(o.focus + dir * o.radius).looking_at(o.focus, Vec3::Y);
+    }
 }
 
 pub fn menger_sponge(n: usize) -> Manifold<Uv> {
@@ -95,10 +121,8 @@ pub fn menger_sponge(n: usize) -> Manifold<Uv> {
 // The texture is an atlas of two squares: the outer skin on the left and the tunnel wall on the right.
 const PAD: f64 = 0.004;
 fn atlas(i: usize, s: f64) -> Real { ((i as f64 + PAD + (1. - 2. * PAD) * s) / 2.) as Real }
-
 fn skin_uv(k: usize, q: [f64; 3]) -> Uv { Uv::new(atlas(0, q[(k + 1) % 3]), q[(k + 2) % 3] as Real) }
-
-fn tunnel_uv(k: usize, q: [f64; 3]) -> Uv { Uv::new(atlas(1, if k == 0 { q[1] } else { q[0] }), q[2] as Real) }
+fn tunl_uv(k: usize, q: [f64; 3]) -> Uv { Uv::new(atlas(1, if k == 0 { q[1] } else { q[0] }), q[2] as Real) }
 
 fn cube(c: [f64; 3], s: [f64; 3], uv: fn(usize, [f64; 3]) -> Uv) -> Buf {
     let (mut pos, mut idx, mut uvs) = (vec![], vec![], vec![]);
@@ -122,7 +146,7 @@ fn cube(c: [f64; 3], s: [f64; 3], uv: fn(usize, [f64; 3]) -> Uv) -> Buf {
 
 pub fn fractal(holes: &mut Buf, x: f64, y: f64, w: f64, depth: usize, depth_max: usize) {
     let w = w / 3.;
-    let (pos, idx, uvs) = cube([x, y, 0.], [w, w, 1.], tunnel_uv);
+    let (pos, idx, uvs) = cube([x, y, 0.], [w, w, 1.], tunl_uv);
     let offset = holes.0.len() / 3;
     holes.0.extend(pos);
     holes.1.extend(idx.iter().map(|i| i + offset));
@@ -150,7 +174,7 @@ fn texture() -> Image {
     for y in 0..h { for x in 0..2 * h {
         let s = (((x % h) as f64 + 0.5) / h as f64 - PAD) / (1. - 2. * PAD);
         let (s, t) = (s as f32, (y as f32 + 0.5) / h as f32);
-        let c = if x < h { skin(s, t) } else { tunnel(s, t) }.to_srgba();
+        let c = if x < h { skin(s, t) } else { tunl(s, t) }.to_srgba();
         data.extend([c.red, c.green, c.blue].map(|v| (v.clamp(0., 1.) * 255.).round() as u8));
         data.push(255);
     }}
@@ -175,7 +199,7 @@ fn skin(s: f32, t: f32) -> Color {
     Color::hsl(hue.rem_euclid(360.), 0.65, light)
 }
 
-fn tunnel(s: f32, t: f32) -> Color {
+fn tunl(s: f32, t: f32) -> Color {
     let band = (s * 3.).floor();
     let f = s * 3. - band;
     let ring = (t * 27.).fract();
